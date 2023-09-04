@@ -6,7 +6,7 @@ Standards-Version: 4.6.2.0
 Vcs-Browser: 
 Vcs-Git: 
 Homepage: https://www.cantab.net/users/john.wiseman/Documents/QtSoundModem.html
-Build-Depends: debhelper-compat (= 13), qtbase5-dev, qt5-qmake, libqt5serialport5-dev, libfftw3-dev, libpulse-dev, libasound2-dev
+Build-Depends: debhelper-compat (= 13), qtbase5-dev, qt5-qmake, libqt5serialport5-dev, libfftw3-dev, libpulse-dev, libasound2-dev, extra-xdg-menus
 Rules-Requires-Root: no
 
 Package: qtsoundmodem
