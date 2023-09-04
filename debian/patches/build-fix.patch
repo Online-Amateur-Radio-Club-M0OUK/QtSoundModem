@@ -1,0 +1,11 @@
+--- a/tcpCode.cpp
++++ b/tcpCode.cpp
+@@ -370,7 +370,7 @@
+ 
+ 	QByteArray datas = HAMLIBsock->readAll();
+ 
+-	qDebug(datas.data());
++	qDebug("SetPTT Error: %s", datas.data());
+ 
+ }
+ 
