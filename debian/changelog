@@ -4,7 +4,7 @@ qtsoundmodem (0.0.0.67-1) UNRELEASED; urgency=medium
 
  -- Dave Hibberd <d@vehibberd.com>  Tue, 12 Sep 2023 21:39:41 +0100
 
-qtsoundmodem (0.0.0.66-1) unstable; urgency=medium
+qtsoundmodem (0.0.0.66-jammy1) jammy; urgency=medium
 
   * Initial release.
 
