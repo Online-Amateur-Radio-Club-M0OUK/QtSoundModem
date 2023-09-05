@@ -1,3 +1,9 @@
+qtsoundmodem (0.0.0.66-1~bpo12+1) bookworm; urgency=medium
+
+  * Rebuild for bookworm-backports.
+
+ -- Dave Hibberd <d@vehibberd.com>  Tue, 05 Sep 2023 21:28:15 +0100
+
 qtsoundmodem (0.0.0.66-1) unstable; urgency=medium
 
   * Initial release.
