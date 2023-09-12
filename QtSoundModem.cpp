@@ -50,7 +50,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 #include "UZ7HOStuff.h"
 
 
-QImage *Constellation;
+QImage *Constellation[4];
 QImage *Waterfall[4] = { 0,0,0,0 };
 QImage *Header[4];
 QLabel *DCDLabel[4];
@@ -73,7 +73,7 @@ void saveSettings();
 void getSettings();
 extern "C" void CloseSound();
 extern "C" void GetSoundDevices();
-extern "C" char modes_name[modes_count][20];
+extern "C" char modes_name[modes_count][21];
 extern "C" int speed[5];
 extern "C" int KISSPort;
 extern "C" short rx_freq[5];
@@ -91,6 +91,7 @@ extern "C" int SoundMode;
 extern "C" int multiCore;
 
 extern "C" int refreshModems;
+int NeedPSKRefresh;
 
 extern "C" int pnt_change[5];
 extern "C" int needRSID[4];
@@ -100,6 +101,11 @@ extern "C" int needSetOffset[4];
 extern "C" float MagOut[4096];
 extern "C" float MaxMagOut;
 extern "C" int MaxMagIndex;
+
+
+extern "C" int using48000;			// Set if using 48K sample rate (ie RUH Modem active)
+extern "C" int ReceiveSize;
+extern "C" int SendSize;		// 100 mS for now
 
 extern "C"
 { 
@@ -137,6 +143,7 @@ int FreqD = 1500;
 int DCD = 50;
 
 char CWIDCall[128] = "";
+extern "C" char CWIDMark[32] = "";
 int CWIDInterval = 0;
 int CWIDLeft = 0;
 int CWIDRight = 0;
@@ -147,11 +154,12 @@ int WaterfallMax = 6000;
 
 int Configuring = 0;
 
-float BinSize;
+extern "C" float BinSize;
 
 extern "C" { int RSID_SABM[4]; }
 extern "C" { int RSID_UI[4]; }
 extern "C" { int RSID_SetModem[4]; }
+extern "C" unsigned int pskStates[4];
 
 int Closing = FALSE;				// Set to stop background thread
 
@@ -461,16 +469,79 @@ void QtSoundModem::initWaterfall(int chan, int state)
 	QApplication::sendEvent(this, event);
 }
 
+QRect PSKRect = { 100,100,100,100 };
+
+QDialog * constellationDialog;
+QLabel * constellationLabel[4];
+QLabel * QualLabel[4];
+
 // Local copies
 
 QLabel *RXOffsetLabel;
 QSlider *RXOffset;
 
+extern "C" void CheckPSKWindows()
+{
+	NeedPSKRefresh = 1;
+}
+void DoPSKWindows()
+{
+	// Display Constellation for PSK Window;
+
+	int NextX = 0;
+	int i;
+
+	for (i = 0; i < 4; i++)
+	{
+		if (pskStates[i])
+		{
+			constellationLabel[i]->setGeometry(QRect(NextX, 19, 121, 121));
+			QualLabel[i]->setGeometry(QRect(1 + NextX, 1, 120, 15));
+			constellationLabel[i]->setVisible(1);
+			QualLabel[i]->setVisible(1);
+
+			NextX += 122;
+		}
+		else
+		{
+			constellationLabel[i]->setVisible(0);
+			QualLabel[i]->setVisible(0);
+		}
+	}
+	constellationDialog->resize(NextX, 140);
+}
+
+
+
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
 	ui.setupUi(this);
-
+ 
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
+
+	constellationDialog = new QDialog(nullptr, Qt::WindowTitleHint | Qt::WindowSystemMenuHint);
+	constellationDialog->resize(488, 140);
+	constellationDialog->setGeometry(PSKRect);
+
+	QFont f("Arial", 8, QFont::Normal);
+
+	for (int i = 0; i < 4; i++)
+	{
+		char Text[16];
+		sprintf(Text, "Chan %c", i + 'A');
+
+		constellationLabel[i] = new QLabel(constellationDialog);
+		constellationDialog->setWindowTitle("PSK Constellations");
+
+		QualLabel[i] = new QLabel(constellationDialog);
+		QualLabel[i]->setText(Text);
+		QualLabel[i]->setFont(f);
+
+		Constellation[i] = new QImage(121, 121, QImage::Format_RGB32);
+		Constellation[i]->fill(black);
+		constellationLabel[i]->setPixmap(QPixmap::fromImage(*Constellation[i]));
+	}
+	constellationDialog->show();
 
 	if (MintoTray)
 	{
@@ -479,8 +550,22 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 		trayIcon = new QSystemTrayIcon(QIcon(":/QtSoundModem/soundmodem.ico"), this);
 		trayIcon->setToolTip(popUp);
 		trayIcon->show();
-
+		
 		connect(trayIcon, SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(TrayActivated(QSystemTrayIcon::ActivationReason)));
+	}
+
+	using48000 = 0;			// Set if using 48K sample rate (ie RUH Modem active)
+	ReceiveSize = 512;
+	SendSize = 1024;		// 100 mS for now
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (soundChannel[i] && (speed[i] == SPEED_RUH48 || speed[i] == SPEED_RUH96))
+		{
+			using48000 = 1;			// Set if using 48K sample rate (ie RUH Modem active)
+			ReceiveSize = 2048;
+			SendSize = 4096;		// 100 mS for now
+		}
 	}
 
 	float FFTCalc = 12000.0f / ((WaterfallMax - WaterfallMin) / 900.0f);
@@ -648,6 +733,11 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(ui.modeC, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.modeD, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 
+	ModemA = speed[0];
+	ModemB = speed[1];
+	ModemC = speed[2];
+	ModemD = speed[3];
+
 	ui.modeA->setCurrentIndex(speed[0]);
 	ui.modeB->setCurrentIndex(speed[1]);
 	ui.modeC->setCurrentIndex(speed[2]);
@@ -692,7 +782,11 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(100);
 
+	QTimer *wftimer = new QTimer(this);
+	connect(wftimer, SIGNAL(timeout()), this, SLOT(doRestartWF()));
+	wftimer->start(1000 * 300);
 
+	
 	cwidtimer = new QTimer(this);
 	connect(cwidtimer, SIGNAL(timeout()), this, SLOT(CWIDTimer()));
 
@@ -776,6 +870,11 @@ void QtSoundModem::MyTimerSlot()
 		ui.centerC->setValue(rx_freq[2]);
 		ui.centerD->setValue(rx_freq[3]);
 	}
+	if (NeedPSKRefresh)
+	{
+		NeedPSKRefresh = 0;
+		DoPSKWindows();
+	}
 
 	show_grid();
 }
@@ -798,6 +897,44 @@ void QtSoundModem::returnPressed()
 
 }
 
+void CheckforChanges(int Mode, int OldMode)
+{
+	int old48000 = using48000;
+
+	if (OldMode != Mode && Mode == 15)
+	{
+		QMessageBox msgBox;
+
+		msgBox.setText("Warning!!\nARDOP Packet is NOT the same as ARDOP\n"
+			"It is an experimental mode for sending ax.25 frames using ARDOP packet formats\n");
+
+		msgBox.setStandardButtons(QMessageBox::Ok);
+
+		msgBox.exec();
+	}
+
+	// See if need to switch beween 12000 and 48000
+
+	using48000 = 0;			// Set if using 48K sample rate (ie RUH Modem active)
+	ReceiveSize = 512;
+	SendSize = 1024;		// 100 mS for now
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (soundChannel[i] && (speed[i] == SPEED_RUH48 || speed[i] == SPEED_RUH96))
+		{
+			using48000 = 1;			// Set if using 48K sample rate (ie RUH Modem active)
+			ReceiveSize = 2048;
+			SendSize = 4096;		// 100 mS for now
+		}
+	}
+
+	if (using48000 != old48000)
+	{
+		InitSound(1);
+	}
+}
+
 
 void QtSoundModem::clickedSlotI(int i)
 {
@@ -807,8 +944,10 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "modeA") == 0)
 	{
+		int OldModem = ModemA;
 		ModemA = ui.modeA->currentIndex();
 		set_speed(0, ModemA);
+		CheckforChanges(ModemA, OldModem);
 		saveSettings();
 		AGW_Report_Modem_Change(0);
 		return;
@@ -816,8 +955,10 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "modeB") == 0)
 	{
+		int OldModem = ModemB;
 		ModemB = ui.modeB->currentIndex();
 		set_speed(1, ModemB);
+		CheckforChanges(ModemB, OldModem);
 		saveSettings();
 		AGW_Report_Modem_Change(1);
 		return;
@@ -825,8 +966,10 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "modeC") == 0)
 	{
+		int OldModem = ModemC;
 		ModemC = ui.modeC->currentIndex();
 		set_speed(2, ModemC);
+		CheckforChanges(ModemC, OldModem);
 		saveSettings();
 		AGW_Report_Modem_Change(2);
 		return;
@@ -834,8 +977,10 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "modeD") == 0)
 	{
+		int OldModem = ModemD;
 		ModemD = ui.modeD->currentIndex();
 		set_speed(3, ModemD);
+		CheckforChanges(ModemD, OldModem);
 		saveSettings();
 		AGW_Report_Modem_Change(3);
 		return;
@@ -843,7 +988,7 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "centerA") == 0)
 	{
-		if (i > 300)
+		if (i > 299)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerA->setValue(Freq_Change(0, i));
@@ -856,7 +1001,7 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "centerB") == 0)
 	{
-		if (i > 300)
+		if (i > 299)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerB->setValue(Freq_Change(1, i));
@@ -868,7 +1013,7 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "centerC") == 0)
 	{
-		if (i > 300)
+		if (i > 299)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerC->setValue(Freq_Change(2, i));
@@ -880,7 +1025,7 @@ void QtSoundModem::clickedSlotI(int i)
 
 	if (strcmp(Name, "centerD") == 0)
 	{
-		if (i > 300)
+		if (i > 299)
 		{
 			QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 			ui.centerD->setValue(Freq_Change(3, i));
@@ -1187,6 +1332,15 @@ void QtSoundModem::doModems()
 	Dlg->KISSOptC->setChecked(KISS_opt[2]);
 	Dlg->KISSOptD->setChecked(KISS_opt[3]);
 
+	sprintf(valChar, "%d", maxframe[0]);
+	Dlg->MaxFrameA->setText(valChar);
+	sprintf(valChar, "%d", maxframe[1]);
+	Dlg->MaxFrameB->setText(valChar);
+	sprintf(valChar, "%d", maxframe[2]);
+	Dlg->MaxFrameC->setText(valChar);
+	sprintf(valChar, "%d", maxframe[3]);
+	Dlg->MaxFrameD->setText(valChar);
+
 	sprintf(valChar, "%d", txdelay[0]);
 	Dlg->TXDelayA->setText(valChar);
 	sprintf(valChar, "%d", txdelay[1]);
@@ -1195,6 +1349,7 @@ void QtSoundModem::doModems()
 	Dlg->TXDelayC->setText(valChar);
 	sprintf(valChar, "%d", txdelay[3]);
 	Dlg->TXDelayD->setText(valChar);
+
 
 	sprintf(valChar, "%d", txtail[0]);
 	Dlg->TXTailA->setText(valChar);
@@ -1255,6 +1410,7 @@ void QtSoundModem::doModems()
 
 	Dlg->CWIDCall->setText(CWIDCall);
 	Dlg->CWIDInterval->setText(QString::number(CWIDInterval));
+	Dlg->CWIDMark->setText(CWIDMark);
 
 	if (CWIDType)
 		Dlg->radioButton_2->setChecked(1);
@@ -1396,6 +1552,23 @@ void QtSoundModem::modemSave()
 	Q = Dlg->TXDelayD->text();
 	txdelay[3] = Q.toInt();
 
+	Q = Dlg->MaxFrameA->text();
+	maxframe[0] = Q.toInt();
+
+	Q = Dlg->MaxFrameB->text();
+	maxframe[1] = Q.toInt();
+
+	Q = Dlg->MaxFrameC->text();
+	maxframe[2] = Q.toInt();
+
+	Q = Dlg->MaxFrameD->text();
+	maxframe[3] = Q.toInt();
+
+	if (maxframe[0] == 0 || maxframe[0] > 7) maxframe[0] = 3;
+	if (maxframe[1] == 0 || maxframe[1] > 7) maxframe[1] = 3;
+	if (maxframe[2] == 0 || maxframe[2] > 7) maxframe[2] = 3;
+	if (maxframe[3] == 0 || maxframe[3] > 7) maxframe[3] = 3;
+
 	Q = Dlg->TXTailA->text();
 	txtail[0] = Q.toInt();
 
@@ -1458,6 +1631,7 @@ void QtSoundModem::modemSave()
 
 
 	strcpy(CWIDCall, Dlg->CWIDCall->text().toUtf8().toUpper());
+	strcpy(CWIDMark, Dlg->CWIDMark->text().toUtf8().toUpper());
 	CWIDInterval = Dlg->CWIDInterval->text().toInt();
 	CWIDType = Dlg->radioButton_2->isChecked();
 
@@ -2091,10 +2265,10 @@ void QtSoundModem::deviceaccept()
 		InitSound(1);
 	}
 
-	// Reset title and tooltip in case ports changed
+	// Reset title and tooltip in case ports changed 
 
 	char Title[128];
-	sprintf(Title, "QtSoundModem Version %s Ports %d/%d", VersionString, AGWPort, KISSPort);
+	sprintf(Title, "QtSoundModem Version %s Ports %d%s/%d%s", VersionString, AGWPort, AGWServ ? "*": "", KISSPort, KISSServ ? "*" : "");
 	w->setWindowTitle(Title);
 
 	sprintf(Title, "QtSoundModem %d %d", AGWPort, KISSPort);
@@ -2517,6 +2691,7 @@ extern "C" void doWaterfall(int snd_ch)
 
 
 extern "C" float aFFTAmpl[1024];
+extern "C" void SMUpdateBusyDetector(int LR, float * Real, float *Imag);
 
 void doWaterfallThread(void * param)
 {
@@ -2616,6 +2791,8 @@ void doWaterfallThread(void * param)
 			fft_disp[snd_ch][i] = round(mag);
 		}
 	}
+
+	SMUpdateBusyDetector(snd_ch, RealOut, ImagOut);
 
 	if (bm == 0)
 		return;
@@ -2874,4 +3051,83 @@ void QtSoundModem::onTEselectionChanged()
 	QTextEdit * x = static_cast<QTextEdit*>(QObject::sender());
 	x->copy();
 }
+
+#define ConstellationHeight 121
+#define ConstellationWidth 121
+#define PLOTRADIUS 60
+
+#define MAX(x, y) ((x) > (y) ? (x) : (y))
+
+extern "C" int SMUpdatePhaseConstellation(int chan, float * Phases, float * Mags, int intPSKPhase, int Count)
+{
+	// Subroutine to update bmpConstellation plot for PSK modes...
+	// Skip plotting and calculations of intPSKPhase(0) as this is a reference phase (9/30/2014)
+
+	float dblPhaseError;
+	float dblPhaseErrorSum = 0;
+	float intP = 0;
+	float dblRad = 0;
+	float dblAvgRad = 0;
+	float dbPhaseStep;
+	float MagMax = 0;
+	float dblPlotRotation = 0;
+
+	int i, intQuality;
+
+	int intX, intY;
+	int yCenter = (ConstellationHeight - 2) / 2;
+	int xCenter = (ConstellationWidth - 2) / 2;
+
+	Constellation[chan]->fill(black);
+
+	for (i = 0; i < 120; i++)
+	{
+		Constellation[chan]->setPixel(xCenter, i, cyan);
+		Constellation[chan]->setPixel(i, xCenter, cyan);
+	}
+
+	if (Count == 0)
+		return 0;
+
+	dbPhaseStep = 2 * M_PI / intPSKPhase;
+
+	for (i = 1; i < Count; i++)  // Don't plot the first phase (reference)
+	{
+		MagMax = MAX(MagMax, Mags[i]); // find the max magnitude to auto scale
+		dblAvgRad += Mags[i];
+	}
+
+	dblAvgRad = dblAvgRad / Count; // the average radius
+
+	for (i = 0; i < Count; i++) 
+	{
+		dblRad = PLOTRADIUS * Mags[i] / MagMax; //  scale the radius dblRad based on intMag
+		intP = round((Phases[i]) / dbPhaseStep);
+
+		// compute the Phase error
+
+		dblPhaseError = fabsf(Phases[i] - intP * dbPhaseStep); // always positive and < .5 *  dblPhaseStep
+		dblPhaseErrorSum += dblPhaseError;
+
+		intX = xCenter + dblRad * cosf(dblPlotRotation + Phases[i]);
+		intY = yCenter + dblRad * sinf(dblPlotRotation + Phases[i]);
+
+		if (intX > 0 && intY > 0)
+			if (intX != xCenter && intY != yCenter)
+				Constellation[chan]->setPixel(intX, intY, yellow);
+	}
+
+	dblAvgRad = dblAvgRad / Count; // the average radius
+
+	intQuality = MAX(0, ((100 - 200 * (dblPhaseErrorSum / (Count)) / dbPhaseStep))); // ignore radius error for (PSK) but include for QAM
+
+	char QualText[64];
+	sprintf(QualText, "Chan %c Qual = %d", chan + 'A', intQuality);
+	QualLabel[chan]->setText(QualText);
+	constellationLabel[chan]->setPixmap(QPixmap::fromImage(*Constellation[chan]));
+//	constellationDialog[chan]->setWindowTitle(QualText);
+	return intQuality;
+}
+
+
 
