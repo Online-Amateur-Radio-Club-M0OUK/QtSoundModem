@@ -21,6 +21,7 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 // UZ7HO Soundmodem Port by John Wiseman G8BPQ
 
 #include <QSettings>
+#include <QDialog>
 
 #include "UZ7HOStuff.h"
 
@@ -43,8 +44,11 @@ extern "C" int UDPServerPort;
 extern "C" int TXPort;
 
 extern char UDPHost[64];
+extern QDialog * constellationDialog;
+extern QRect PSKRect;
 
 extern char CWIDCall[128];
+extern "C" char CWIDMark[32];
 extern int CWIDInterval;
 extern int CWIDLeft;
 extern int CWIDRight;
@@ -119,6 +123,8 @@ void getSettings()
 
 	QSettings* settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 	settings->sync();
+
+	PSKRect = settings->value("PSKWindow").toRect();
 
 	SoundMode = settings->value("Init/SoundMode", 0).toInt();
 	UDPClientPort = settings->value("Init/UDPClientPort", 8888).toInt();
@@ -219,7 +225,13 @@ void getSettings()
 	txdelay[2] = settings->value("Modem/TxDelay3", 250).toInt();
 	txdelay[3] = settings->value("Modem/TxDelay4", 250).toInt();
 
+	txtail[0] = settings->value("Modem/TxTail1", 50).toInt();
+	txtail[1] = settings->value("Modem/TxTail2", 50).toInt();
+	txtail[2] = settings->value("Modem/TxTail3", 50).toInt();
+	txtail[3] = settings->value("Modem/TxTail4", 50).toInt();
+
 	strcpy(CWIDCall, settings->value("Modem/CWIDCall", "").toString().toUtf8().toUpper());
+	strcpy(CWIDMark, settings->value("Modem/CWIDMark", "").toString().toUtf8().toUpper());
 	CWIDInterval = settings->value("Modem/CWIDInterval", 0).toInt();
 	CWIDLeft = settings->value("Modem/CWIDLeft", 0).toInt();
 	CWIDRight = settings->value("Modem/CWIDRight", 0).toInt();
@@ -341,6 +353,7 @@ void saveSettings()
 {
 	QSettings * settings = new QSettings("QtSoundModem.ini", QSettings::IniFormat);
 
+	settings->setValue("PSKWindow", constellationDialog->geometry());
 	settings->setValue("Init/SoundMode", SoundMode);
 	settings->setValue("Init/UDPClientPort", UDPClientPort);
 	settings->setValue("Init/UDPServerPort", UDPServerPort);
@@ -436,6 +449,7 @@ void saveSettings()
 	settings->setValue("Modem/TxTail4", txtail[3]);
 
 	settings->setValue("Modem/CWIDCall", CWIDCall);
+	settings->setValue("Modem/CWIDMark", CWIDMark);
 	settings->setValue("Modem/CWIDInterval", CWIDInterval);
 	settings->setValue("Modem/CWIDLeft", CWIDLeft);
 	settings->setValue("Modem/CWIDRight", CWIDRight);
