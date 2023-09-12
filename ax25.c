@@ -1526,6 +1526,40 @@ void get_exclude_list(char * line, TStringList * list)
 	}
 }
 
+void get_digi_list(char * line, TStringList * list)
+{
+	// Convert comma separated list of calls to ax25 format in list
+
+	string axcall;
+
+	char copy[512];
+
+	char * ptr, *Context;
+
+	if (line[0] == 0)
+		return;
+
+	strcpy(copy, line);						// copy as strtok messes with it
+	strcat(copy, ",");
+
+	axcall.Length = 7;
+	axcall.AllocatedLength = 8;
+	axcall.Data = malloc(8);
+
+	memset(axcall.Data, 0, 8);
+
+	ptr = strtok_s(copy, " ,", &Context);
+
+	while (ptr)
+	{
+		if (ConvToAX25(ptr, axcall.Data) == 0)
+			return;
+
+		Add(list, duplicateString(&axcall));
+		ptr = strtok_s(NULL, " ,", &Context);
+	}
+}
+
 
 
 void get_exclude_frm(char * line, TStringList * list)
@@ -1959,7 +1993,7 @@ void ax25_init()
 		initTStringList(&list_digi_callsigns[i]);
 		initTStringList(&KISS_acked[i]);
 
-		get_exclude_list(MyDigiCall[i], &list_digi_callsigns[i]);
+		get_digi_list(MyDigiCall[i], &list_digi_callsigns[i]);
 		get_exclude_list(exclude_callsigns[i], &list_exclude_callsigns[i]);
 		get_exclude_frm(exclude_APRS_frm[i], &list_exclude_APRS_frm[i]);
 
