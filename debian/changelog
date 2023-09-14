@@ -1,3 +1,9 @@
+qtsoundmodem (0.0.0.67-2~bpo12+1) bookworm; urgency=medium
+
+  * Rebuild for bookworm.
+
+ -- Dave Hibberd <d@vehibberd.com>  Thu, 14 Sep 2023 22:04:39 +0100
+
 qtsoundmodem (0.0.0.67-2) unstable; urgency=medium
 
   * Fixing libpulse
@@ -6,7 +12,7 @@ qtsoundmodem (0.0.0.67-2) unstable; urgency=medium
 
 qtsoundmodem (0.0.0.67-1~bpo12+1) bookworm; urgency=medium
 
-  * Rebuild for bookworm-backports.
+  * Rebuild for bookworm.
 
  -- Dave Hibberd <d@vehibberd.com>  Tue, 12 Sep 2023 21:52:54 +0100
 
@@ -18,7 +24,7 @@ qtsoundmodem (0.0.0.67-1) unstable; urgency=medium
 
 qtsoundmodem (0.0.0.66-1~bpo12+1) bookworm; urgency=medium
 
-  * Rebuild for bookworm-backports.
+  * Rebuild for bookworm.
 
  -- Dave Hibberd <d@vehibberd.com>  Tue, 05 Sep 2023 21:28:15 +0100
 
