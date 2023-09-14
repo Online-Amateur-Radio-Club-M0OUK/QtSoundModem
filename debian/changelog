@@ -1,8 +1,8 @@
-qtsoundmodem (0.0.0.67-2) UNRELEASED; urgency=medium
+qtsoundmodem (0.0.0.67-2) unstable; urgency=medium
 
   * Fixing libpulse
 
- -- Dave Hibberd <d@vehibberd.com>  Thu, 14 Sep 2023 21:17:09 +0100
+ -- Dave Hibberd <d@vehibberd.com>  Thu, 14 Sep 2023 21:53:22 +0100
 
 qtsoundmodem (0.0.0.67-1) unstable; urgency=medium
 
