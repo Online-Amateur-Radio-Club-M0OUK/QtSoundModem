@@ -1,0 +1,20 @@
+--- a/pulse.c
++++ b/pulse.c
+@@ -67,7 +67,7 @@
+ 	if (handle)
+ 		return handle;			// already done
+ 
+-	handle = dlopen("libpulse.so", RTLD_LAZY);
++	handle = dlopen("libpulse.so.0", RTLD_LAZY);
+ 
+ 	if (!handle)
+ 	{
+@@ -91,7 +91,7 @@
+ 	if ((ppa_operation_unref = getModule(handle, "pa_operation_unref")) == NULL) return NULL;
+ 	if ((ppa_operation_get_state = getModule(handle, "pa_operation_get_state")) == NULL) return NULL;
+ 
+-	shandle = dlopen("libpulse-simple.so", RTLD_LAZY);
++	shandle = dlopen("libpulse-simple.so.0", RTLD_LAZY);
+ 
+ 	if (!shandle)
+ 	{

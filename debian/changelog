@@ -1,8 +1,14 @@
+qtsoundmodem (0.0.0.67-2) unstable; urgency=medium
+
+  * Fixing libpulse
+
+ -- Dave Hibberd <d@vehibberd.com>  Thu, 14 Sep 2023 21:53:22 +0100
+
 qtsoundmodem (0.0.0.67-jammy1) jammy; urgency=medium
 
   * New Upstream 
 
- -- Dave Hibberd <d@vehibberd.com>  Tue, 12 Sep 2023 21:39:41 +0100
+ -- Dave Hibberd <d@vehibberd.com>  Tue, 12 Sep 2023 21:49:25 +0100
 
 qtsoundmodem (0.0.0.66-jammy1) jammy; urgency=medium
 
