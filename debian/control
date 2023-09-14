@@ -12,5 +12,6 @@ Rules-Requires-Root: no
 Package: qtsoundmodem
 Architecture: linux-any
 Depends: ${shlibs:Depends}, ${misc:Depends}
+Recommends: libpulse0
 Description: Qt-based Sound Modem & Terminal for packet
  QtSoundModem (QtSM) is a multi-platform port of UZ7HO's SoundModem
