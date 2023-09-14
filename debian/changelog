@@ -1,4 +1,4 @@
-qtsoundmodem (0.0.0.67-2) unstable; urgency=medium
+qtsoundmodem (0.0.0.67-jammy2) jammy; urgency=medium
 
   * Fixing libpulse
 
