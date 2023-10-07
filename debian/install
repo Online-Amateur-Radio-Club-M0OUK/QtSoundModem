@@ -1,3 +1,2 @@
-QtSoundModem /opt/oarc/QtSoundModem
 debian/qtsoundmodem.desktop /usr/share/applications
 debian/QtSoundModem.png /usr/share/pixmaps
