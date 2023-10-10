@@ -1,6 +1,6 @@
-qtsoundmodem (0.0.0.68-1) unstable; urgency=medium
+qtsoundmodem (0.0.0.68-jammy1) unstable; urgency=medium
 
-  * New Upstream 
+  * New Upstream
 
  -- Dave Hibberd <d@vehibberd.com>  Tue, 10 Oct 2023 23:03:20 +0100
 
