@@ -1,0 +1,9 @@
+#!/bin/sh
+
+set -e
+
+SM="/opt/oarc/QtSoundModem"
+
+if [ -d $SM ]; then
+	rm -rf /opt/oarc/QtSoundModem
+fi
