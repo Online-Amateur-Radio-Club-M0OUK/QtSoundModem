@@ -2,7 +2,7 @@
 Name=QtSoundModem
 Comment=QtSoundModem
 Version=1.0
-Exec=/opt/oarc/QtSoundModem/QtSoundModem
+Exec=/usr/bin/qtsoundmodem
 GenericName=QtSoundModem
 Icon=QtSoundModem
 NoDisplay=false
