@@ -1,3 +1,9 @@
+qtsoundmodem (0.0.0.68-1~bpo11+1) bullseye; urgency=medium
+
+  * Rebuild for bullseye.
+
+ -- Dave Hibberd <d@vehibberd.com>  Tue, 10 Oct 2023 23:05:11 +0100
+
 qtsoundmodem (0.0.0.68-1) unstable; urgency=medium
 
   * New Upstream 
