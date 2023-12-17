@@ -51,17 +51,18 @@ along with QtSoundModem.  If not, see http://www.gnu.org/licenses
 
 
 QImage *Constellation[4];
-QImage *Waterfall[4] = { 0,0,0,0 };
-QImage *Header[4];
+QImage *Waterfall = 0;
 QLabel *DCDLabel[4];
 QLineEdit *chanOffsetLabel[4];
 QImage *DCDLed[4];
 
 QImage *RXLevel;
+QImage *RXLevel2;
 
-QLabel *WaterfallCopy[2];
-QLabel *HeaderCopy[2];
+QLabel *WaterfallCopy;
+
 QLabel * RXLevelCopy;
+QLabel * RXLevel2Copy;
 
 QTextEdit * monWindowCopy;
 
@@ -73,6 +74,8 @@ QList<QSerialPortInfo> Ports = QSerialPortInfo::availablePorts();
 
 void saveSettings();
 void getSettings();
+void DrawModemFreqRange();
+
 extern "C" void CloseSound();
 extern "C" void GetSoundDevices();
 extern "C" char modes_name[modes_count][21];
@@ -120,11 +123,10 @@ extern "C"
 	int Freq_Change(int Chan, int Freq);
 	void set_speed(int snd_ch, int Modem);
 	void init_speed(int snd_ch);
-	void wf_pointer(int snd_ch);
 	void FourierTransform(int NumSamples, short * RealIn, float * RealOut, float * ImagOut, int InverseTransform);
 	void dofft(short * in, float * outr, float * outi);
 	void init_raduga();
-	void wf_Scale(int Chan);
+	void DrawFreqTicks();
 	void AGW_Report_Modem_Change(int port);
 	char * strlop(char * buf, char delim);
 	void sendRSID(int Chan, int dropTX);
@@ -157,7 +159,10 @@ int WaterfallMin = 00;
 int WaterfallMax = 6000;
 
 int Configuring = 0;
+bool lockWaterfall = false;
+bool inWaterfall = false;
 
+extern "C" int NeedWaterfallHeaders;
 extern "C" float BinSize;
 
 extern "C" { int RSID_SABM[4]; }
@@ -174,6 +179,12 @@ QRgb green = qRgb(0, 255, 0);
 QRgb red = qRgb(255, 0, 0);
 QRgb yellow = qRgb(255, 255, 0);
 QRgb cyan = qRgb(0, 255, 255);
+
+QRgb txText = qRgb(192, 0, 0);
+QRgb rxText = qRgb(0, 0, 192);
+
+bool darkTheme = true;
+bool minimizeonStart = true;
 
 // Indexed colour list from ARDOPC
 
@@ -198,7 +209,7 @@ QRgb vbColours[16] = { qRgb(255, 255, 255), qRgb(255, 99, 71), qRgb(255, 215, 0)
 						qRgb(218, 165, 32), qRgb(255, 0, 255) };
 
 unsigned char  WaterfallLines[2][80][4096] = { 0 };
-int NextWaterfallLine[2] = { 0 };
+int NextWaterfallLine[2] = {0, 0};
 
 unsigned int LastLevel = 255;
 unsigned int LastBusy = 255;
@@ -307,8 +318,20 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 
 	QRect r = geometry();
 
-	int A, B, C, W;
-	int modemBoxHeight = 30;
+	QRect r1 = ui.monWindow->geometry();
+	QRect r2 = ui.centralWidget->geometry();
+
+	int modemBoxHeight = 34;
+	
+	int Width = r.width();
+	int Height = r.height() - 25;
+
+	int monitorTop;
+	int monitorHeight;
+	int sessionTop;
+	int sessionHeight = 0;
+	int waterfallsTop;
+	int waterfallsHeight = WaterfallImageHeight;
 
 	ui.modeB->setVisible(soundChannel[1]);
 	ui.centerB->setVisible(soundChannel[1]);
@@ -331,78 +354,46 @@ void QtSoundModem::resizeEvent(QResizeEvent* event)
 	if (soundChannel[2] || soundChannel[3])
 		modemBoxHeight = 60;
 
+	ui.Waterfall->setVisible(0);
 
-	A = r.height() - 25;   // No waterfalls
+	monitorTop = modemBoxHeight + 1;
 
-	if (UsingBothChannels && Secondwaterfall)
+	// Now have one waterfall label containing headers and waterfalls
+
+		if (Firstwaterfall || Secondwaterfall)
+			ui.Waterfall->setVisible(1);
+
+	if (AGWServ)
 	{
-		// Two waterfalls
-
-		ui.WaterfallA->setVisible(1);
-		ui.HeaderA->setVisible(1);
-		ui.WaterfallB->setVisible(1);
-		ui.HeaderB->setVisible(1);
-
-		A = r.height() - 258;   // Top of Waterfall A
-		B = A + 115;			// Top of Waterfall B
+		sessionTable->setVisible(true);
+		sessionHeight = 150;
 	}
 	else
 	{
-		// One waterfall
-
-		// Could be Left or Right
-
-		if (Firstwaterfall)
-		{
-			if (soundChannel[0] == RIGHT)
-			{
-				ui.WaterfallA->setVisible(0);
-				ui.HeaderA->setVisible(0);
-				ui.WaterfallB->setVisible(1);
-				ui.HeaderB->setVisible(1);
-			}
-			else
-			{
-				ui.WaterfallA->setVisible(1);
-				ui.HeaderA->setVisible(1);
-				ui.WaterfallB->setVisible(0);
-				ui.HeaderB->setVisible(0);
-			}
-
-			A = r.height() - 145;   // Top of Waterfall A
-		}
-		else
-			A = r.height() - 25;   // Top of Waterfall A
+		sessionTable->setVisible(false);
 	}
 
-	C = A - 150;			// Bottom of Monitor, Top of connection list
-	W = r.width();
+	// if only displaying one Waterfall, change height of waterfall area
 
-	// Calc Positions of Waterfalls
-
-	ui.monWindow->setGeometry(QRect(0, modemBoxHeight, W, C - (modemBoxHeight + 26)));
-	sessionTable->setGeometry(QRect(0, C, W, 175));
-
-	if (UsingBothChannels)
+	if (UsingBothChannels == 0  || (Firstwaterfall == 0) || (Secondwaterfall == 0))
 	{
-		ui.HeaderA->setGeometry(QRect(0, A, W, 38));
-		ui.WaterfallA->setGeometry(QRect(0, A + 38, W, 80));
-		ui.HeaderB->setGeometry(QRect(0, B, W, 38));
-		ui.WaterfallB->setGeometry(QRect(0, B + 38, W, 80));
+		waterfallsHeight /= 2;
 	}
-	else
-	{
-		if (soundChannel[0] == RIGHT)
-		{
-			ui.HeaderB->setGeometry(QRect(0, A, W, 38));
-			ui.WaterfallB->setGeometry(QRect(0, A + 38, W, 80));
-		}
-		else
-		{
-			ui.HeaderA->setGeometry(QRect(0, A, W, 38));
-			ui.WaterfallA->setGeometry(QRect(0, A + 38, W, 80));
-		}
-	}
+
+	if ((Firstwaterfall == 0) && (Secondwaterfall == 0))
+		waterfallsHeight = 0;
+
+	monitorHeight = Height - sessionHeight - waterfallsHeight - modemBoxHeight;
+	waterfallsTop = Height - waterfallsHeight;
+	sessionTop = Height - (sessionHeight + waterfallsHeight);
+
+	ui.monWindow->setGeometry(QRect(0, monitorTop, Width, monitorHeight));
+
+	if (AGWServ)
+		sessionTable->setGeometry(QRect(0, sessionTop, Width, sessionHeight));
+
+	if (waterfallsHeight)
+		ui.Waterfall->setGeometry(QRect(0, waterfallsTop, Width, waterfallsHeight + 2));
 }
 
 QAction * setupMenuLine(QMenu * Menu, char * Label, QObject * parent, int State)
@@ -426,50 +417,40 @@ void QtSoundModem::menuChecked()
 	int state = Act->isChecked();
 
 	if (Act == actWaterfall1)
-	{
-		int oldstate = Firstwaterfall;
 		Firstwaterfall = state;
 
-		if (state != oldstate)
-			initWaterfall(0, state);
-
-	}
 	else if (Act == actWaterfall2)
-	{
-		int oldstate = Secondwaterfall;
 		Secondwaterfall = state;
 
-		if (state != oldstate)
-			initWaterfall(1, state);
+	initWaterfall(Firstwaterfall | Secondwaterfall);
 
-	}
 	saveSettings();
 }
 
-void QtSoundModem::initWaterfall(int chan, int state)
+void QtSoundModem::initWaterfall(int state)
 {
 	if (state == 1)
 	{
-		if (chan == 0)
-		{
-			ui.WaterfallA = new QLabel(ui.centralWidget);
-			WaterfallCopy[0] = ui.WaterfallA;
-		}
-		else
-		{
-			ui.WaterfallB = new QLabel(ui.centralWidget);
-			WaterfallCopy[1] = ui.WaterfallB;
-		}
-		Waterfall[chan] = new QImage(1024, 80, QImage::Format_RGB32);
-		Waterfall[chan]->fill(black);
+	//	if (ui.Waterfall)
+	//	{
+	//		delete ui.Waterfall;
+	//		ui.Waterfall = new QLabel(ui.centralWidget);
+	//	}
+		WaterfallCopy = ui.Waterfall;
+
+		Waterfall = new QImage(1024, WaterfallImageHeight + 2, QImage::Format_RGB32);
+
+		NeedWaterfallHeaders = 1;
+
 	}
 	else
 	{
-		delete(Waterfall[chan]);
-		Waterfall[chan] = 0;
+		delete(Waterfall);
+		Waterfall = 0;
 	}
 
 	QSize Size(800, 602);						// Not actually used, but Event constructor needs it
+
 	QResizeEvent *event = new QResizeEvent(Size, Size);
 	QApplication::sendEvent(this, event);
 }
@@ -518,7 +499,7 @@ void DoPSKWindows()
 	constellationDialog->resize(NextX, 140);
 }
 
-
+QTimer *wftimer;
 
 QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 {
@@ -529,6 +510,8 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	ui.setupUi(this);
 
 	mythis = this;
+
+	getSettings();
 
 	QSettings mysettings("QtSoundModem.ini", QSettings::IniFormat);
 
@@ -606,7 +589,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	restoreGeometry(mysettings.value("geometry").toByteArray());
 	restoreState(mysettings.value("windowState").toByteArray());
 
-	sessionTable = new QTableWidget(this);
+	sessionTable = new QTableWidget(ui.centralWidget);
 
 	sessionTable->verticalHeader()->setVisible(FALSE);
 	sessionTable->verticalHeader()->setDefaultSectionSize(20);
@@ -615,7 +598,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	sessionTable->setColumnCount(12);
 	m_TableHeader << "MyCall" << "DestCall" << "Status" << "Sent pkts" << "Sent Bytes" << "Rcvd pkts" << "Rcvd bytes" << "Rcvd FC" << "FEC corr" << "CPS TX" << "CPS RX" << "Direction";
 
-	sessionTable->setStyleSheet("QHeaderView::section { background-color:rgb(224, 224, 224) }");
+	mysetstyle();
 
 	sessionTable->setHorizontalHeaderLabels(m_TableHeader);
 	sessionTable->setColumnWidth(0, 80);
@@ -672,13 +655,10 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	actAbout = ui.menuBar->addAction("&About");
 	connect(actAbout, SIGNAL(triggered()), this, SLOT(doAbout()));
 
-	Header[0] = new QImage(1024, 38, QImage::Format_RGB32);
-	Header[1] = new QImage(1024, 38, QImage::Format_RGB32);
 	RXLevel = new QImage(150, 10, QImage::Format_RGB32);
 	RXLevel->fill(white);
 	ui.RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
 	RXLevelCopy = ui.RXLevel;
-
 
 	DCDLabel[0] = new QLabel(this);
 	DCDLabel[0]->setObjectName(QString::fromUtf8("DCDLedA"));
@@ -720,41 +700,15 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	chanOffsetLabel[2] = ui.RXOffsetC;
 	chanOffsetLabel[3] = ui.RXOffsetD;
 
+	WaterfallCopy = ui.Waterfall;
 
-	//	Waterfall[0]->setColorCount(16);
-	//	Waterfall[1]->setColorCount(16);
+	initWaterfall(Firstwaterfall | Secondwaterfall);
 
-
-	//	for (i = 0; i < 16; i++)
-	//	{
-	//	Waterfall[0]->setColor(i, vbColours[i]);
-	//		Waterfall[1]->setColor(i, vbColours[i]);
-	//	}
-
-	WaterfallCopy[0] = ui.WaterfallA;
-	WaterfallCopy[1] = ui.WaterfallB;
-
-	initWaterfall(0, 1);
-	initWaterfall(1, 1);
-
-	Header[0]->fill(black);
-	Header[1]->fill(black);
-
-	HeaderCopy[0] = ui.HeaderA;
-	HeaderCopy[1] = ui.HeaderB;
 	monWindowCopy = ui.monWindow;
 
 	ui.monWindow->document()->setMaximumBlockCount(10000);
 
 //	connect(ui.monWindow, SIGNAL(selectionChanged()), this, SLOT(onTEselectionChanged()));
-
-	ui.HeaderA->setPixmap(QPixmap::fromImage(*Header[0]));
-	ui.HeaderB->setPixmap(QPixmap::fromImage(*Header[1]));
-
-	wf_pointer(soundChannel[0]);
-	wf_pointer(soundChannel[1]);
-	wf_Scale(0);
-	wf_Scale(1);
 
 	connect(ui.modeA, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
 	connect(ui.modeB, SIGNAL(currentIndexChanged(int)), this, SLOT(clickedSlotI(int)));
@@ -785,7 +739,6 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 
 	ui.DCDSlider->setValue(dcd_threshold);
 
-
 	char valChar[32];
 	sprintf(valChar, "RX Offset %d", rxOffset);
 	ui.RXOffsetLabel->setText(valChar);
@@ -811,7 +764,7 @@ QtSoundModem::QtSoundModem(QWidget *parent) : QMainWindow(parent)
 	connect(timer, SIGNAL(timeout()), this, SLOT(MyTimerSlot()));
 	timer->start(100);
 
-	QTimer *wftimer = new QTimer(this);
+	wftimer = new QTimer(this);
 	connect(wftimer, SIGNAL(timeout()), this, SLOT(doRestartWF()));
 	wftimer->start(1000 * 300);
 
@@ -885,7 +838,7 @@ void extSetOffset(int chan)
 	sprintf(valChar, "%d", chanOffset[chan]);
 	chanOffsetLabel[chan]->setText(valChar);
 
-	wf_pointer(soundChannel[chan]);
+	NeedWaterfallHeaders = true;
 
 	pnt_change[0] = 1;
 	pnt_change[1] = 1;
@@ -926,6 +879,18 @@ void QtSoundModem::MyTimerSlot()
 	{
 		NeedPSKRefresh = 0;
 		DoPSKWindows();
+	}
+
+	if (NeedWaterfallHeaders)
+	{
+		NeedWaterfallHeaders = 0;
+
+		if (Waterfall)
+		{
+			Waterfall->fill(black);
+			DrawModemFreqRange();
+			DrawFreqTicks();
+		}
 	}
 
 	show_grid();
@@ -1101,8 +1066,7 @@ void QtSoundModem::clickedSlotI(int i)
 		sprintf(valChar, "RX Offset %d",rxOffset);
 		ui.RXOffsetLabel->setText(valChar);
 
-		wf_pointer(soundChannel[0]);
-		wf_pointer(soundChannel[1]);
+		NeedWaterfallHeaders = true;
 
 		pnt_change[0] = 1;
 		pnt_change[1] = 1;
@@ -1276,10 +1240,13 @@ void QtSoundModem::clickedSlot()
 	{
 		bool ok;
 		Font = QFontDialog::getFont(&ok, QFont(Font, this));
+
 		if (ok)
 		{
 			// the user clicked OK and font is set to the font the user selected
 			QApplication::setFont(Font);
+			sessionTable->horizontalHeader()->setFont(Font); 
+
 			saveSettings();
 		}
 		else
@@ -1287,7 +1254,7 @@ void QtSoundModem::clickedSlot()
 			// the user canceled the dialog; font is set to the initial
 			// value, in this case Helvetica [Cronyx], 10
 
-			QApplication::setFont(Font);
+//			QApplication::setFont(Font);
 
 		}
 		return;
@@ -1480,6 +1447,11 @@ void QtSoundModem::doModems()
 	Dlg->IL2PModeC->setCurrentIndex(il2p_mode[2]);
 	Dlg->IL2PModeD->setCurrentIndex(il2p_mode[3]);
 
+	Dlg->CRC_A->setChecked(il2p_crc[0]);
+	Dlg->CRC_B->setChecked(il2p_crc[1]);
+	Dlg->CRC_C->setChecked(il2p_crc[2]);
+	Dlg->CRC_D->setChecked(il2p_crc[3]);
+
 	Dlg->CWIDCall->setText(CWIDCall);
 	Dlg->CWIDInterval->setText(QString::number(CWIDInterval));
 	Dlg->CWIDMark->setText(CWIDMark);
@@ -1569,6 +1541,12 @@ extern "C" void get_exclude_list(char * line, TStringList * list);
 void QtSoundModem::modemaccept()
 {
 	modemSave();
+
+	AGW_Report_Modem_Change(0);
+	AGW_Report_Modem_Change(1);
+	AGW_Report_Modem_Change(2);
+	AGW_Report_Modem_Change(3);
+
 	delete(Dlg);
 	saveSettings();
 
@@ -1698,6 +1676,11 @@ void QtSoundModem::modemSave()
 	il2p_mode[2] = Dlg->IL2PModeC->currentIndex();
 	il2p_mode[3] = Dlg->IL2PModeD->currentIndex();
 
+	il2p_crc[0] = Dlg->CRC_A->isChecked();
+	il2p_crc[1] = Dlg->CRC_B->isChecked();
+	il2p_crc[2] = Dlg->CRC_C->isChecked();
+	il2p_crc[3] = Dlg->CRC_D->isChecked();
+
 	recovery[0] = Dlg->recoverBitA->currentIndex();
 	recovery[1] = Dlg->recoverBitB->currentIndex();
 	recovery[2] = Dlg->recoverBitC->currentIndex();
@@ -1749,7 +1732,6 @@ void QtSoundModem::modemSave()
 	for (i = 0; i < 4; i++)
 	{
 		initTStringList(&list_digi_callsigns[i]);
-
 		get_exclude_list(MyDigiCall[i], &list_digi_callsigns[i]);
 	}
 
@@ -1766,6 +1748,7 @@ void QtSoundModem::modemSave()
 	Q = Dlg->LPFWidthD->text();
 	lpf[3] = Q.toInt();
 */
+
 }
 
 void QtSoundModem::modemreject()
@@ -2139,6 +2122,7 @@ void QtSoundModem::doDevices()
 	Dev->DualPTT->setChecked(DualPTT);
 
 	Dev->multiCore->setChecked(multiCore);
+	Dev->darkTheme->setChecked(darkTheme);
 
 	Dev->WaterfallMin->setCurrentIndex(Dev->WaterfallMin->findText(QString::number(WaterfallMin), Qt::MatchFixedString));
 	Dev->WaterfallMax->setCurrentIndex(Dev->WaterfallMax->findText(QString::number(WaterfallMax), Qt::MatchFixedString));
@@ -2148,6 +2132,33 @@ void QtSoundModem::doDevices()
 
 	UI.exec();
 
+}
+
+void QtSoundModem::mysetstyle()
+{
+	if (darkTheme)
+	{
+		qApp->setStyleSheet(
+			"QWidget {color: white; background-color: black}"
+			"QTabBar::tab {color: rgb(127, 127, 127); background-color: black}"
+			"QTabBar::tab::selected {color: white}"
+			"QPushButton {border-style: outset; border-width: 2px; border-color: rgb(127, 127, 127)}"
+			"QPushButton::default {border-style: outset; border-width: 2px; border-color: white}");
+
+		sessionTable->setStyleSheet("QHeaderView::section { background-color:rgb(40, 40, 40) }");
+
+		txText = qRgb(255, 127, 127);
+		rxText = qRgb(173, 216, 230);
+	}
+	else
+	{
+		qApp->setStyleSheet("");
+
+		sessionTable->setStyleSheet("QHeaderView::section { background-color:rgb(224, 224, 224) }");
+
+		txText = qRgb(192, 0, 0);
+		rxText = qRgb(0, 0, 192);
+	}
 }
 
 void QtSoundModem::deviceaccept()
@@ -2251,7 +2262,6 @@ void QtSoundModem::deviceaccept()
 	if (UsingLeft && UsingRight)
 		UsingBothChannels = 1;
 
-
 	SCO = Dev->singleChannelOutput->isChecked();
 	raduga = Dev->colourWaterfall->isChecked();
 	AGWServ = Dev->AGWEnabled->isChecked();
@@ -2275,6 +2285,8 @@ void QtSoundModem::deviceaccept()
 	DualPTT = Dev->DualPTT->isChecked();
 	TX_rotate = Dev->txRotation->isChecked();
 	multiCore = Dev->multiCore->isChecked();
+	darkTheme = Dev->darkTheme->isChecked();
+	mysetstyle();
 
 	if (Dev->CAT->isChecked())
 		PTTMode = PTTCAT;
@@ -2360,8 +2372,7 @@ void QtSoundModem::deviceaccept()
 	ClosePTTPort();
 	OpenPTTPort();
 
-	wf_pointer(soundChannel[0]);
-	wf_pointer(soundChannel[1]);
+	NeedWaterfallHeaders = true;
 
 	delete(Dev);
 	saveSettings();
@@ -2406,33 +2417,55 @@ void QtSoundModem::handleButton(int Port, int Type)
 	doCalib(Port, Type);
 }
 
+
+
 void QtSoundModem::doRestartWF()
 {
-	if (Firstwaterfall)
+	if (inWaterfall)
 	{
-		initWaterfall(0, 0);
-		initWaterfall(0, 1);
-	}
+		// in waterfall update thread
 
-	if (Secondwaterfall)
+		wftimer->start(5000);
+		return;
+	}
+		
+	lockWaterfall = true;
+
+	if (Firstwaterfall | Secondwaterfall)
 	{
-		initWaterfall(1, 0);
-		initWaterfall(1, 1);
+		initWaterfall(0);
+		initWaterfall(1);
 	}
 
 	delete(RXLevel);
 	delete(ui.RXLevel);
 	ui.RXLevel = new QLabel(ui.centralWidget);
 	RXLevelCopy = ui.RXLevel;
-	ui.RXLevel->setGeometry(QRect(780, 17, 150, 12));
-//	ui.RXLevel->setFrameShape(QFrame::Box);
-//	ui.RXLevel->setFrameShadow(QFrame::Sunken);
+	ui.RXLevel->setGeometry(QRect(780, 14, 150, 11));
+	ui.RXLevel->setFrameShape(QFrame::Box);
+	ui.RXLevel->setFrameShadow(QFrame::Sunken);
+
+	delete(RXLevel2);
+	delete(ui.RXLevel2);
+
+	ui.RXLevel2 = new QLabel(ui.centralWidget);
+	RXLevel2Copy = ui.RXLevel2;
+
+	ui.RXLevel2->setGeometry(QRect(780, 23, 150, 11));
+	ui.RXLevel2->setFrameShape(QFrame::Box);
+	ui.RXLevel2->setFrameShadow(QFrame::Sunken);
 
 	RXLevel = new QImage(150, 10, QImage::Format_RGB32);
 	RXLevel->fill(cyan);
-//	ui.RXLevel->setPixmap(QPixmap::fromImage(*RXLevel));
+
+	RXLevel2 = new QImage(150, 10, QImage::Format_RGB32);
+	RXLevel2->fill(white);
 
 	ui.RXLevel->setVisible(1);
+	if (UsingBothChannels)
+		ui.RXLevel2->setVisible(1);
+
+	lockWaterfall = false;
 }
 
 
@@ -2489,7 +2522,7 @@ void QtSoundModem::RefreshSpectrum(unsigned char * Data)
 
 	// Last 4 bytes are level busy and Tuning lines
 
-	Waterfall[0]->fill(Black);
+	Waterfall->fill(Black);
 
 	if (Data[206] != LastLevel)
 	{
@@ -2510,13 +2543,13 @@ void QtSoundModem::RefreshSpectrum(unsigned char * Data)
 		if (val > 63)
 			val = 63;
 
-		Waterfall[0]->setPixel(i, val, Yellow);
+		Waterfall->setPixel(i, val, Yellow);
 		if (val < 62)
-			Waterfall[0]->setPixel(i, val + 1, Gold);
+			Waterfall->setPixel(i, val + 1, Gold);
 		Data++;
 	}
 
-	ui.WaterfallA->setPixmap(QPixmap::fromImage(*Waterfall[0]));
+	ui.Waterfall->setPixmap(QPixmap::fromImage(*Waterfall));
 
 }
 
@@ -2552,7 +2585,7 @@ void QtSoundModem::RefreshWaterfall(int snd_ch, unsigned char * Data)
 {
 	int j;
 	unsigned char * Line;
-	int len = Waterfall[0]->bytesPerLine();
+	int len = Waterfall->bytesPerLine();
 	int TopLine = NextWaterfallLine[snd_ch];
 
 	// Write line to cyclic buffer then draw starting with the line just written
@@ -2565,15 +2598,14 @@ void QtSoundModem::RefreshWaterfall(int snd_ch, unsigned char * Data)
 
 	for (j = 63; j > 0; j--)
 	{
-		Line = Waterfall[0]->scanLine(j);
+		Line = Waterfall->scanLine(j);
 		memcpy(Line, &WaterfallLines[snd_ch][TopLine++][0], len);
 		if (TopLine > 63)
 			TopLine = 0;
 	}
 
-	ui.WaterfallA->setPixmap(QPixmap::fromImage(*Waterfall[0]));
+	ui.Waterfall->setPixmap(QPixmap::fromImage(*Waterfall));
 }
-
 
 void QtSoundModem::sendtoTrace(char * Msg, int tx)
 {
@@ -2587,9 +2619,9 @@ void QtSoundModem::sendtoTrace(char * Msg, int tx)
 	// Insert the text at the position of the cursor (which is the end of the document).
 
 	if (tx)
-		monWindowCopy->setTextColor(qRgb(192, 0, 0));
+		monWindowCopy->setTextColor(txText);
 	else
-		monWindowCopy->setTextColor(qRgb(0, 0, 192));
+		monWindowCopy->setTextColor(rxText);
 
 	monWindowCopy->textCursor().insertText(Msg);
 
@@ -2651,186 +2683,166 @@ extern "C" int nonGUIMode;
 
 // This draws the Frequency Scale on Waterfall
 
-extern "C" void wf_Scale(int Chan)
+extern "C" void DrawFreqTicks()
 {
 	if (nonGUIMode)
 		return;
 
+	// Draw Frequency Markers on waterfall header(s);
+
 	int x, i;
 	char Textxx[20];
-	QImage * bm = Header[Chan];
+	QImage * bm = Waterfall;
 
 	QPainter qPainter(bm);
 	qPainter.setBrush(Qt::black);
 	qPainter.setPen(Qt::white);
 
-	if (Chan == 0)
-		sprintf(Textxx, "Left");
-	else
-		sprintf(Textxx, "Right");
+	int Chan;
 
 #ifdef WIN32
-	int Top = 3;
+		int Top = 3;
 #else
-	int Top = 4;
+		int Top = 4;
 #endif
+		int Base = 0;
 
-	qPainter.drawText(2, Top, 100, 20, 0, Textxx);
-
-	// We drew markers every 100 Hz or 100 / binsize pixels
-
-
-	int Markers = ((WaterfallMax - WaterfallMin) / 100) + 5;			// Number of Markers to draw
-	int Freq = WaterfallMin;
-	float PixelsPerMarker = 100.0 / BinSize;
-
-
-
-	for (i = 0; i < Markers; i++)
-	{
-		x = round(PixelsPerMarker * i);
-		if (x < 1025)
+		for (Chan = 0; Chan < 2; Chan++)
 		{
-			if ((Freq % 500) == 0)
-				qPainter.drawLine(x, 22, x, 15);
+			if (Chan == 1 || ((UsingBothChannels == 0) && (UsingRight == 1)))
+				sprintf(Textxx, "Right");
 			else
-				qPainter.drawLine(x, 22, x, 18);
+				sprintf(Textxx, "Left");
 
-			if ((Freq % 500) == 0)
+			qPainter.drawText(2, Top, 100, 20, 0, Textxx);
+
+			// We drew markers every 100 Hz or 100 / binsize pixels
+
+			int Markers = ((WaterfallMax - WaterfallMin) / 100) + 5;			// Number of Markers to draw
+			int Freq = WaterfallMin;
+			float PixelsPerMarker = 100.0 / BinSize;
+
+			for (i = 0; i < Markers; i++)
 			{
-				sprintf(Textxx, "%d", Freq);
+				x = round(PixelsPerMarker * i);
+				if (x < 1025)
+				{
+					if ((Freq % 500) == 0)
+						qPainter.drawLine(x, Base + 22, x, Base + 15);
+					else
+						qPainter.drawLine(x, Base + 22, x, Base + 18);
 
-				if (x < 924)
-					qPainter.drawText(x - 12, Top, 100, 20, 0, Textxx);
+					if ((Freq % 500) == 0)
+					{
+						sprintf(Textxx, "%d", Freq);
+
+						if (x < 924)
+							qPainter.drawText(x - 12, Top, 100, 20, 0, Textxx);
+					}
+				}
+				Freq += 100;
 			}
+
+			if (UsingBothChannels == 0)
+				break;
+
+			Top += WaterfallTotalPixels;
+			Base = WaterfallTotalPixels;
 		}
-		Freq += 100;
-	}
-	HeaderCopy[Chan]->setPixmap(QPixmap::fromImage(*bm));
 
 }
 
-// This draws the frequency Markers on the Waterfall
+// These draws the frequency Markers on the Waterfall
 
-
-void do_pointer(int waterfall)
+void DrawModemFreqRange()
 {
 	if (nonGUIMode)
 		return;
 
+	// Draws the modem freq bars on waterfall header(s)
+
 
 	int x1, x2, k, pos1, pos2, pos3;
-	QImage * bm = Header[waterfall];
+	QImage * bm = Waterfall;
 
 	QPainter qPainter(bm);
 	qPainter.setBrush(Qt::NoBrush);
 	qPainter.setPen(Qt::white);
 
-	//	bm->fill(black);
+	int Chan;
+	int LRtoDisplay = LEFT;
+	int top = 0;
 
-	qPainter.fillRect(0, 23, 1024, 10, Qt::black);
-
-	// We drew markers every 100 Hz or 100 / binsize pixels
-
-	float PixelsPerHz = 1.0 / BinSize;
-	k = 26;
-
-	// draw all enabled ports on the ports on this soundcard
-
-	// First Modem is always on the first waterfall
-	// If second is enabled it is on the first unless different
-	//		channel from first
-
-	for (int i = 0; i < 4; i++)
+	for (Chan = 0; Chan < 2; Chan++)
 	{
+		if (Chan == 1 || ((UsingBothChannels == 0) && (UsingRight == 1)))
+			LRtoDisplay = RIGHT;
+
+		//	bm->fill(black);
+
+	//	qPainter.fillRect(top, 23, 1024, 10, Qt::black);
+
+		// We drew markers every 100 Hz or 100 / binsize pixels
+
+		float PixelsPerHz = 1.0 / BinSize;
+		k = 26 + top;
+
+		// draw all enabled ports on the ports on this soundcard
+
+		// First Modem is always on the first waterfall
+		// If second is enabled it is on the first unless different
+		//		channel from first
+
+		for (int i = 0; i < 4; i++)
+		{
+			if (soundChannel[i] != LRtoDisplay)
+					continue;
+
+			pos1 = roundf((((rxOffset + chanOffset[i] + rx_freq[i]) - 0.5*rx_shift[i]) - WaterfallMin) * PixelsPerHz) - 5;
+			pos2 = roundf((((rxOffset + chanOffset[i] + rx_freq[i]) + 0.5*rx_shift[i]) - WaterfallMin) * PixelsPerHz) - 5;
+			pos3 = roundf(((rxOffset + chanOffset[i] + rx_freq[i])) - WaterfallMin * PixelsPerHz);
+			x1 = pos1 + 5;
+			x2 = pos2 + 5;
+
+			qPainter.setPen(Qt::white);
+			qPainter.drawLine(x1, k, x2, k);
+			qPainter.drawLine(x1, k - 3, x1, k + 3);
+			qPainter.drawLine(x2, k - 3, x2, k + 3);
+			//		qPainter.drawLine(pos3, k - 3, pos3, k + 3);
+
+			if (rxOffset || chanOffset[i])
+			{
+				// Draw TX posn if rxOffset used
+
+				pos3 = roundf((rx_freq[i] - WaterfallMin) * PixelsPerHz);
+				qPainter.setPen(Qt::magenta);
+				qPainter.drawLine(pos3, k - 3, pos3, k + 3);
+				qPainter.drawLine(pos3, k - 3, pos3, k + 3);
+				qPainter.drawLine(pos3 - 2, k - 3, pos3 + 2, k - 3);
+			}
+
+			k += 3;
+		}
 		if (UsingBothChannels == 0)
-		{
-			// Only One Waterfall. If first chan is 
+			break;
 
-			if ((waterfall == 0 && soundChannel[i] == RIGHT) || (waterfall == 1 && soundChannel[i] == LEFT))
-				return;
-		}
-
-		if (soundChannel[i] == 0)
-			continue;
-
-
-		if (UsingBothChannels == 1)
-			if ((waterfall == 0 && soundChannel[i] == RIGHT) || (waterfall == 1 && soundChannel[i] == LEFT))
-				continue;
-
-		pos1 = roundf((((rxOffset + chanOffset[i] + rx_freq[i]) - 0.5*rx_shift[i]) - WaterfallMin) * PixelsPerHz) - 5;
-		pos2 = roundf((((rxOffset + chanOffset[i] + rx_freq[i]) + 0.5*rx_shift[i]) - WaterfallMin) * PixelsPerHz) - 5;
-		pos3 = roundf(((rxOffset + chanOffset[i] + rx_freq[i])) - WaterfallMin  * PixelsPerHz);
-		x1 = pos1 + 5;
-		x2 = pos2 + 5;
-
-		qPainter.setPen(Qt::white);
-		qPainter.drawLine(x1, k, x2, k);
-		qPainter.drawLine(x1, k - 3, x1, k + 3);
-		qPainter.drawLine(x2, k - 3, x2, k + 3);
-		qPainter.drawLine(pos3, k - 3, pos3, k + 3);
-
-		if (rxOffset || chanOffset[i])
-		{
-			// Draw TX posn if rxOffset used
-
-			pos3 = roundf((rx_freq[i] - WaterfallMin) * PixelsPerHz);
-			qPainter.setPen(Qt::magenta);
-			qPainter.drawLine(pos3, k - 3, pos3, k + 3);
-			qPainter.drawLine(pos3, k - 3, pos3, k + 3);
-			qPainter.drawLine(pos3 - 2, k - 3, pos3 + 2, k - 3);
-		}
-
-		k += 3;
+		LRtoDisplay = RIGHT;
+		top = WaterfallTotalPixels;
 	}
-	HeaderCopy[waterfall]->setPixmap(QPixmap::fromImage(*bm));
-}
-
-void wf_pointer(int snd_ch)
-{
-	UNUSED(snd_ch);
-
-	do_pointer(0);
-	do_pointer(1);
-//	do_pointer(2);
-//	do_pointer(3);
 }
 
 
 void doWaterfallThread(void * param);
 
-/*
-#ifdef WIN32
-
-#define pthread_t uintptr_t
-
-extern "C" uintptr_t _beginthread(void(__cdecl *start_address)(void *), unsigned stack_size, void *arglist);
-
-#else
-
-#include <pthread.h>
-
-extern "C" pthread_t _beginthread(void(*start_address)(void *), unsigned stack_size, void * arglist)
-{
-	pthread_t thread;
-
-	if (pthread_create(&thread, NULL, (void * (*)(void *))start_address, (void*)arglist) != 0)
-		perror("New Thread");
-	else
-		pthread_detach(thread);
-
-	return thread;
-}
-
-#endif
-*/
 extern "C" void doWaterfall(int snd_ch)
 {
 	if (nonGUIMode)
 		return;
 
 	if (Closing)
+		return;
+
+	if (lockWaterfall)
 		return;
 
 //	if (multiCore)			// Run modems in separate threads
@@ -2840,6 +2852,20 @@ extern "C" void doWaterfall(int snd_ch)
 
 }
 
+extern "C" void displayWaterfall()
+{
+	// if we are using both channels but only want right need to extract correct half of Image
+
+	if (Waterfall == nullptr)
+		return;
+
+	if (UsingBothChannels && (Firstwaterfall == 0))
+		WaterfallCopy->setAlignment(Qt::AlignBottom | Qt::AlignLeft);
+	else
+		WaterfallCopy->setAlignment(Qt::AlignTop | Qt::AlignLeft);
+
+	WaterfallCopy->setPixmap(QPixmap::fromImage(*Waterfall));
+}
 
 extern "C" float aFFTAmpl[1024];
 extern "C" void SMUpdateBusyDetector(int LR, float * Real, float *Imag);
@@ -2847,13 +2873,20 @@ extern "C" void SMUpdateBusyDetector(int LR, float * Real, float *Imag);
 void doWaterfallThread(void * param)
 {
 	int snd_ch = (int)(size_t)param;
-	int WaterfallNumber = snd_ch;
+
+	if (lockWaterfall)
+		return;
+
+	if (Configuring)
+		return;
+
+	inWaterfall = true;					// don't allow restart waterfall
 
 	if (snd_ch == 1 && UsingLeft == 0)	// Only using right
 		snd_ch = 0;						// Samples are in first buffer
 
-	QImage * bm = Waterfall[snd_ch];
-	
+	QImage * bm = Waterfall;
+
 	int  i;
 	single  mag;
 	UCHAR * p;
@@ -2865,9 +2898,8 @@ void doWaterfallThread(void * param)
 	float RealOut[8192] = { 0 };
 	float ImagOut[8192];
 
-	if (Configuring)
-		return;
 
+	RefreshLevel(CurrentLevel);	// Signal Level
 
 	hFFTSize = FFTSize / 2;
 
@@ -2909,7 +2941,7 @@ void doWaterfallThread(void * param)
 		}
 	}
 	else
-	{		
+	{
 		dofft(&fft_buf[snd_ch][0], RealOut, ImagOut);
 
 		//	FourierTransform(1024, &fft_buf[snd_ch][0], RealOut, ImagOut, 0);
@@ -2950,69 +2982,68 @@ void doWaterfallThread(void * param)
 
 	SMUpdateBusyDetector(snd_ch, RealOut, ImagOut);
 
-	RefreshLevel(CurrentLevel);	// Signal Level
+	// we always do fft so we can get centre freq and do busy detect. But only upodate waterfall if on display
 
 	if (bm == 0)
+	{
+		inWaterfall = false;
 		return;
-
-	try
-	{
-
-		p = Line;
-		lineLen = bm->bytesPerLine();
-
-		if (raduga == DISP_MONO)
-		{
-			for (i = Start; i < End; i++)
-			{
-				n = fft_disp[snd_ch][i];
-				*(p++) = n;					// all colours the same
-				*(p++) = n;
-				*(p++) = n;
-				p++;
-			}
-		}
-		else
-		{
-			for (i = Start; i < End; i++)
-			{
-				n = fft_disp[snd_ch][i];
-				memcpy(p, &RGBWF[n], 4);
-				p += 4;
-			}
-		}
-
-		// Scroll
-
-		int TopLine = NextWaterfallLine[snd_ch];
-
-		// Write line to cyclic buffer then draw starting with the line just written
-
-		memcpy(&WaterfallLines[snd_ch][NextWaterfallLine[snd_ch]++][0], Line, 4096);
-		if (NextWaterfallLine[snd_ch] > 79)
-			NextWaterfallLine[snd_ch] = 0;
-
-		for (int j = 79; j > 0; j--)
-		{
-			p = bm->scanLine(j);
-			memcpy(p, &WaterfallLines[snd_ch][TopLine][0], lineLen);
-			TopLine++;
-			if (TopLine > 79)
-				TopLine = 0;
-		}
-
-		WaterfallCopy[WaterfallNumber]->setPixmap(QPixmap::fromImage(*bm));
-		//	WaterfallCopy[snd_ch - 1]->setPixmap(*pm);
-			//	WaterfallCopy[1]->setPixmap(QPixmap::fromImage(*bm));
 	}
-	catch (const std::exception& e) // caught by reference to base
+	if ((Firstwaterfall == 0 && snd_ch == 0) || (Secondwaterfall == 0 && snd_ch == 1))
 	{
-		qDebug() << " a standard exception was caught, with message '"
-			<< e.what() << "'\n";
+		inWaterfall = false;
+		return;
 	}
 
+	p = Line;
+	lineLen = 4096;
+
+	if (raduga == DISP_MONO)
+	{
+		for (i = Start; i < End; i++)
+		{
+			n = fft_disp[snd_ch][i];
+			*(p++) = n;					// all colours the same
+			*(p++) = n;
+			*(p++) = n;
+			p++;
+		}
+	}
+	else
+	{
+		for (i = Start; i < End; i++)
+		{
+			n = fft_disp[snd_ch][i];
+			memcpy(p, &RGBWF[n], 4);
+			p += 4;
+		}
+	}
+
+	// Scroll
+
+	int TopLine = NextWaterfallLine[snd_ch];
+	int TopScanLine = WaterfallHeaderPixels;
+
+	if (snd_ch)
+		TopScanLine += WaterfallTotalPixels;
+
+	// Write line to cyclic buffer then draw starting with the line just written
+
+	memcpy(&WaterfallLines[snd_ch][NextWaterfallLine[snd_ch]++][0], Line, 4096);
+	if (NextWaterfallLine[snd_ch] > 79)
+		NextWaterfallLine[snd_ch] = 0;
+
+	for (int j = 79; j > 0; j--)
+	{
+		p = bm->scanLine(j + TopScanLine);
+		memcpy(p, &WaterfallLines[snd_ch][TopLine][0], lineLen);
+		TopLine++;
+		if (TopLine > 79)
+			TopLine = 0;
+	}
+
+	inWaterfall = false;
 }
-
 
 
 void QtSoundModem::changeEvent(QEvent* e)

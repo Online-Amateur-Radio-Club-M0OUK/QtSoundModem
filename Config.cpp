@@ -54,6 +54,7 @@ extern int CWIDLeft;
 extern int CWIDRight;
 extern int CWIDType;
 extern bool afterTraffic;
+extern bool darkTheme;
 
 extern "C" int RSID_SABM[4];
 extern "C" int RSID_UI[4];
@@ -115,6 +116,7 @@ void GetPortSettings(int Chan)
 
 	fx25_mode[Chan] = getAX25Param("FX25", FX25_MODE_RX).toInt();
 	il2p_mode[Chan] = getAX25Param("IL2P", IL2P_MODE_NONE).toInt();
+	il2p_crc[Chan] = getAX25Param("IL2PCRC", 0).toInt();
 	RSID_UI[Chan] = getAX25Param("RSID_UI", 0).toInt();
 	RSID_SABM[Chan] = getAX25Param("RSID_SABM", 0).toInt();
 	RSID_SetModem[Chan] = getAX25Param("RSID_SetModem", 0).toInt();
@@ -303,6 +305,8 @@ void getSettings()
 
 	}
 
+	darkTheme = settings->value("Init/darkTheme", false).toBool();
+
 	delete(settings);
 }
 
@@ -347,6 +351,7 @@ void SavePortSettings(int Chan)
 	saveAX25Param("MyDigiCall", MyDigiCall[Chan]);
 	saveAX25Param("FX25", fx25_mode[Chan]);
 	saveAX25Param("IL2P", il2p_mode[Chan]);
+	saveAX25Param("IL2PCRC", il2p_crc[Chan]);
 	saveAX25Param("RSID_UI", RSID_UI[Chan]);
 	saveAX25Param("RSID_SABM", RSID_SABM[Chan]);
 	saveAX25Param("RSID_SetModem", RSID_SetModem[Chan]);
@@ -462,6 +467,8 @@ void saveSettings()
 	settings->setValue("Modem/CWIDRight", CWIDRight);
 	settings->setValue("Modem/CWIDType", CWIDType);
 	settings->setValue("Modem/afterTraffic", afterTraffic);
+
+	settings->setValue("Init/darkTheme", darkTheme);
 
 	saveAX25Params(0);
 	saveAX25Params(1);
