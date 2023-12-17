@@ -3,8 +3,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LocalDebuggerWorkingDirectory>C:\DevProgs\BPQ32\SMTest</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
-    <LocalDebuggerCommandArguments>
-    </LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>-stylesheet StyleSheet.css</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LocalDebuggerWorkingDirectory>c:\devprogs\bpq32\SMSAT2</LocalDebuggerWorkingDirectory>
@@ -12,23 +11,24 @@
     <LocalDebuggerCommandArguments>&lt; d:\samples.wav</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <LocalDebuggerWorkingDirectory>.\debug</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerWorkingDirectory>C:\DevProgs\BPQ32\SMTest</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerCommandArguments>-stylesheet StyleSheet.css</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LocalDebuggerWorkingDirectory>C:\DevProgs\BPQ32\SMSat</LocalDebuggerWorkingDirectory>
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <QtLastBackgroundBuild>2023-09-26T11:58:59.9128543Z</QtLastBackgroundBuild>
+    <QtLastBackgroundBuild>2023-10-15T11:35:54.9027336Z</QtLastBackgroundBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="QtSettings">
-    <QtLastBackgroundBuild>2023-09-26T11:59:00.0378577Z</QtLastBackgroundBuild>
+    <QtLastBackgroundBuild>2023-10-15T11:35:55.0741785Z</QtLastBackgroundBuild>
   </PropertyGroup>
   <PropertyGroup Label="QtSettings" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <QtLastBackgroundBuild>2023-09-26T11:59:00.1388610Z</QtLastBackgroundBuild>
+    <QtLastBackgroundBuild>2023-10-15T11:35:55.2661628Z</QtLastBackgroundBuild>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="QtSettings">
-    <QtLastBackgroundBuild>2023-09-26T11:59:00.2228656Z</QtLastBackgroundBuild>
+    <QtLastBackgroundBuild>2023-10-15T11:35:55.4659021Z</QtLastBackgroundBuild>
   </PropertyGroup>
 </Project>
