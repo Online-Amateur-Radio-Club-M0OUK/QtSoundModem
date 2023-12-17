@@ -1,8 +1,8 @@
-qtsoundmodem (0.0.0.71-1) unstable; urgency=medium
+qtsoundmodem (0.0.0.71-jammy1) unstable; urgency=medium
 
   * New Upstream Release
 
- -- Dave Hibberd <d@vehibberd.com>  Sun, 17 Dec 2023 14:07:52 +0000
+ -- Dave Hibberd <d@vehibberd.com>  Sun, 17 Dec 2023 14:12:32 +0000
 
 qtsoundmodem (0.0.0.68-jammy1) jammy; urgency=medium
 
