@@ -27,7 +27,6 @@ void make_core_BPF(UCHAR snd_ch, short freq, short width);
 void make_core_TXBPF(UCHAR snd_ch, float freq, float width);
 void make_core_INTR(UCHAR snd_ch);
 void make_core_LPF(UCHAR snd_ch, short width);
-void wf_pointer(int snd_ch);
 void dw9600ProcessSample(int snd_ch, short Sample);
 void init_RUH48(int snd_ch);
 void init_RUH96(int snd_ch);
@@ -65,10 +64,7 @@ int TXPort = 8884;
 
 BOOL Firstwaterfall = 1;
 BOOL Secondwaterfall = 1;
-
 int multiCore = FALSE;
-
-
 
 BOOL MinOnStart  =  0;
 //RS TReedSolomon;
@@ -728,7 +724,7 @@ void init_speed(int snd_ch)
 	  form1.show_freq_a;
 	  form1.show_freq_b;
 	  */
-	wf_pointer(snd_ch);
+	NeedWaterfallHeaders = TRUE;
 
 	CheckPSKWindows();
 }
@@ -862,6 +858,8 @@ void runModemthread(void * param)
 }
 
 // I think this processes a buffer of samples
+
+int Toggle = 0;
 
 void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 {
@@ -1064,6 +1062,8 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 
 		// Collect samples for both channels if needed
 
+		Toggle++;
+
 		Needed = FFTSize - fftCount;
 
 		if (Needed <= rx_bufsize)
@@ -1076,7 +1076,8 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 				data1 += 2;
 			}
 
-			doWaterfall(FirstWaterfallChan);
+			if ((Toggle & 1) || (UsingBothChannels == 0))
+				doWaterfall(FirstWaterfallChan);
 
 			if (data2)
 			{
@@ -1085,8 +1086,12 @@ void BufferFull(short * Samples, int nSamples)			// These are Stereo Samples
 					*ptr2++ = *data2;
 					data2 += 2;
 				}
-				doWaterfall(1);
+				if (((Toggle & 1) == 0))
+					doWaterfall(1);
 			}
+
+			if (Firstwaterfall || Secondwaterfall)
+				displayWaterfall();
 
 			remainingSamples = rx_bufsize - Needed;
 			fftCount = 0;
