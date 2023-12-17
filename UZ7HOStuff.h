@@ -4,8 +4,8 @@
 //	 My port of UZ7HO's Soundmodem
 //
 
-#define VersionString "0.0.0.68"
-#define VersionBytes {0, 0, 0, 68}
+#define VersionString "0.0.0.71"
+#define VersionBytes {0, 0, 0, 71}
 
 // Added FX25. 4x100 FEC and V27 not Working and disabled
 
@@ -166,6 +166,18 @@
 //	   Add signal level bar to GUI
 //	   Fix Waterfall display when using right channel only
 //	   Allow PTT device to be added 
+
+// .69	Add basic Dark Theme
+//		Fix some timing bugs in Waterfall and RX Level refresh
+//		Only display session table if AGW interface is enabled
+//		Fix operation with both left and right channels in use
+
+// .70  Restructure Waterfall area to be a single image 
+
+// .71	Add IL2P CRC Mode
+//		Improve reliability of waterfall update
+//		Report and set fx.25 and il2p flags to/from BPQ
+
 
 
 
@@ -997,6 +1009,7 @@ extern TAX25Port AX25Port[4][port_num];
 
 extern int fx25_mode[4];
 extern int il2p_mode[4];
+extern int il2p_crc[4];
 
 extern int tx_fx25_size[4];
 extern int tx_fx25_size_cnt[4];
@@ -1098,7 +1111,7 @@ int Add(TStringList * Q, string * Entry);
 
 struct il2p_context_s {
 
-	enum { IL2P_SEARCHING = 0, IL2P_HEADER, IL2P_PAYLOAD, IL2P_DECODE } state;
+	enum { IL2P_SEARCHING = 0, IL2P_HEADER, IL2P_PAYLOAD, IL2P_CRC, IL2P_DECODE } state;
 
 	unsigned int acc;	// Accumulate most recent 24 bits for sync word matching.
 				// Lower 8 bits are also used for accumulating bytes for
@@ -1122,8 +1135,12 @@ struct il2p_context_s {
 	int pc;			// Number of bytes placed in above.
 
 	int corrected;		// Number of symbols corrected by RS FEC.
+
+	int crccount;			// fec chars collected
+	unsigned char crc[4];	// the 4 fec chars
 };
 
+extern int NeedWaterfallHeaders;
 
 #ifdef __cplusplus
 }
