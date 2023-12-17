@@ -1,3 +1,9 @@
+qtsoundmodem (0.0.0.71-1~bpo12+1) bookworm; urgency=medium
+
+  * Rebuild for bookworm.
+
+ -- Dave Hibberd <d@vehibberd.com>  Sun, 17 Dec 2023 14:10:48 +0000
+
 qtsoundmodem (0.0.0.71-1) unstable; urgency=medium
 
   * New Upstream Release
